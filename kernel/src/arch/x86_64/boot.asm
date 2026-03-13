@@ -1,14 +1,15 @@
-ALIGN_   equ 1 << 0
-MEMINFO  equ 1 << 1
-FLAGS    equ ALIGN_ | MEMINFO
-MAGIC    equ 0x1BADB002
-CHECKSUM equ -(MAGIC + FLAGS)
-
 section .multiboot
-align 4
-dd MAGIC
-dd FLAGS
-dd CHECKSUM
+header_start:
+    dd 0xe85250d6                ; magic
+    dd 0
+    dd header_end - header_start ; header len
+    ; checksum
+    dd 0x100000000 - (0xe85250d6 + 0 + (header_end - header_start))
+
+    dw 0 ; type
+    dw 0 ; flags
+    dw 8 ; size
+header_end:
 
 section .rodata
 gdt64:
@@ -44,17 +45,44 @@ extern kernel_main
 _start:
     ; setup a stack
     mov esp, stack_top
-    mov edi, ebx ; save the multiboot info pointer in edi
 
-    ; setup paging
+    call check_multiboot
+    call check_cpuid
+    call check_long_mode
+    call setup_page_tbl
+    call enable_paging
+    call load_gdt
+
+    ; update sectors
+    mov ax, gdt64.data
+    mov ss, ax
+    mov ds, ax
+    mov es, ax
+
+    ; LEAP OF FAITH!
+    jmp gdt64.code:long_mode_start
+
+load_gdt:
+    ; load GDT
+    lgdt [gdt64.pointer]
+
+    ret
+
+setup_page_tbl:
     ; bit range
-    ; 0 - present (must be 1)
-    ; 1 - R/W (0 - R, 1 - RW)
-    ; 2 - U/S (0 - Kernel space, 1 - user space)
-    ; 3 - pwt (page level write through, usually 0)
-    ; 4 - pcd (page level cache disable, usually 0)
-    ; 7 - page size (0 - 4 KiB, 1 - 2 MiB)
-    ; the rest of the bits are the physical address of the next level page table
+    ; bit - name: meaning
+    ; 0 - present: the page is currently in memory
+    ; 1 - writable: it’s allowed to write to this page
+    ; 2 - user accessible: if not set, only kernel mode code can access this page
+    ; 3 - write through caching: writes go directly to memory
+    ; 4 - disable cache: no cache is used for this page
+    ; 5 - accessed: the CPU sets this bit when this page is used
+    ; 6 - dirty: the CPU sets this bit when a write to this page occurs
+    ; 7 - huge page/null: must be 0 in P1 and P4, creates a 1GiB page in P3, creates a 2MiB page in P2
+    ; 8 - global: page isn’t flushed from caches on address space switch (PGE bit of CR4 register must be set)
+    ; 9-11 - available: can be used freely by the OS
+    ; 52-62 - available: can be used freely by the OS
+    ; 63 - no execute: forbid executing code on this page (the NXE bit in the EFER register must be set)
 
     ;; P4 table
     mov eax, p3_tbl
@@ -81,7 +109,9 @@ _start:
     cmp ecx, 512 ; there are 4096 / 8 = 512 entries in a page table
     jne .map_p2_tbl
 
-    ;; ENABLE PAGING!!!!!!!!!!
+    ret
+
+enable_paging:
     mov eax, p4_tbl
     mov cr3, eax    ; load the address of P4 table into cr3 register
 
@@ -96,26 +126,91 @@ _start:
     or eax, 1 << 8
     wrmsr
 
-    ; we're ready to enable paging!
+    ; enable paging in the cr0 register
     mov eax, cr0
     or eax, 1 << 31
     or eax, 1 << 16
     mov cr0, eax
 
-    ; load GDT
-    lgdt [gdt64.pointer]
+    ret
 
-    ; update sectors
-    mov ax, gdt64.data
-    mov ss, ax
-    mov ds, ax
-    mov es, ax
+check_cpuid:
+    ; check if the processor supports CPUID instruction
+    ; CPUID instruction is supported if bit 21 of FLAGS register is modifiable
 
-    ; the long leap of faith!
-    jmp gdt64.code:long_mode_start
+    ; copy FLAGS into EAX via stack
+    pushfd
+    pop eax
+    mov ecx, eax ; for comparison later on
+    xor eax, 1 << 21 ; try to flip bit 21
+
+    ; copy EAX to FLAGS via stack
+    push eax
+    popfd
+
+    ; copy FLAGS into EAX again, to check if bit 21 was flipped
+    pushfd
+    pop eax
+
+    ; restore the original FLAGS
+    push ecx
+    popfd
+
+    ; if they're equal that means the bit 21 wasn't flipped
+    ; and our CPU doesn't support CPUID
+    cmp eax, ecx
+    je .no_cpuid
+
+    ret
+.no_cpuid:
+    mov al, '1'
+    jmp error
+
+; source: https://en.wikipedia.org/wiki/CPUID
+check_long_mode:
+    ; check if long mode is supported by the CPU
+    mov eax, 1 << 31    ; get the maximum supported extended function
+    cpuid
+    cmp eax, 1 << 31 | 1
+    jb .no_long_mode
+
+    ; use extended info to tets if long mode is available
+    mov eax, 0x80000001 ; argument for extended processor info
+    cpuid
+    test edx, 1 << 29   ; bit 29 of edx indicates if long mode is supported
+    jz .no_long_mode
+
+    ret
+
+.no_long_mode:
+    mov al, '2'
+    jmp error
+
+check_multiboot:
+    ; according to multiboot spec the bootloader
+    ; must write the following magic value to eax
+    ; before loading the kernel
+    cmp eax, 0x36d76289
+    jne .no_multiboot
+
+    ret
+.no_multiboot:
+    mov al, '0'
+    jmp error
+
+; prints `ERR: ` and the given error code to screen and hangs.
+; parameter: error code (in ascii) in al
+error:
+    mov dword [0xb8000], 0x4f524f45
+    mov dword [0xb8004], 0x4f3a4f52
+    mov dword [0xb8008], 0x4f204f20
+    mov byte  [0xb800a], al
+
+    hlt
 
 section .text
 bits 64
 long_mode_start:
     call kernel_main
+
     hlt
