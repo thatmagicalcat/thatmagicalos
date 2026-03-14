@@ -46,6 +46,8 @@ _start:
     ; setup a stack
     mov esp, stack_top
 
+    mov edi, ebx ; save the multiboot info pointer for later use
+
     call check_multiboot
     call check_cpuid
     call check_long_mode
