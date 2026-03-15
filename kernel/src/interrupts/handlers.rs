@@ -1,3 +1,5 @@
+use core::arch::asm;
+
 use super::*;
 
 #[derive(Debug)]
@@ -19,6 +21,8 @@ pub extern "C" fn breakpoint_handler(stack_frame: &ExceptionStackFrame) {
 
 pub extern "C" fn divide_by_zero_handler(stack_frame: &ExceptionStackFrame) {
     println!("\nEXCEPTION: DIVIDE BY ZERO\n{stack_frame:#?}");
+
+    unsafe { asm!("hlt") }
 }
 
 pub extern "C" fn page_fault_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
@@ -30,4 +34,6 @@ pub extern "C" fn page_fault_handler(stack_frame: &ExceptionStackFrame, error_co
             stack_frame
         );
     }
+
+    unsafe { asm!("hlt") }
 }
