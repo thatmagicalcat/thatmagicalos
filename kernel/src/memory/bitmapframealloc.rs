@@ -5,18 +5,10 @@ use x86_64::structures::paging::frame;
 
 use crate::kernel_bounds;
 
-const PHYSICAL_PAGE_FRAME_SIZE: usize = 1024 * 4;
+use super::{PAGE_SIZE, Frame};
+
 const USED: u8 = !0;
 const FREE: u8 = 0;
-
-#[repr(transparent)]
-pub struct Frame(usize);
-
-impl Frame {
-    pub fn get_ptr(&self) -> *mut u8 {
-        (self.0 * PHYSICAL_PAGE_FRAME_SIZE) as *mut u8
-    }
-}
 
 pub struct BitmapFrameAllocator {
     bitmap_slice: &'static mut [u8],
@@ -36,9 +28,9 @@ impl BitmapFrameAllocator {
             .map(|area| area.end_address())
             .max()
             .expect("No memory areas found") as usize;
-        let total_frames = highest_address / PHYSICAL_PAGE_FRAME_SIZE;
+        let total_frames = highest_address / PAGE_SIZE;
         let bitmap_array_size = total_frames / 8;
-        let align_mask = PHYSICAL_PAGE_FRAME_SIZE - 1;
+        let align_mask = PAGE_SIZE - 1;
         let bitmap_array_start_ptr = if kernel_end & align_mask == 0 {
             // already aligned
             kernel_end
@@ -62,29 +54,29 @@ impl BitmapFrameAllocator {
             .iter()
             .filter(|area| area.typ() == MemoryAreaType::Available)
             .for_each(|area| {
-                let start_frame = area.start_address() as usize / PHYSICAL_PAGE_FRAME_SIZE;
-                let end_frame = (area.end_address() as usize).div_ceil(PHYSICAL_PAGE_FRAME_SIZE);
+                let start_frame = area.start_address() as usize / PAGE_SIZE;
+                let end_frame = (area.end_address() as usize).div_ceil(PAGE_SIZE);
                 allocator.mark_frames_free(start_frame..end_frame);
             });
 
         // mark the memory used by kernel as used
-        let kernel_start_frame = kernel_bounds().0 / PHYSICAL_PAGE_FRAME_SIZE;
-        let kernel_end_frame = kernel_bounds().1.div_ceil(PHYSICAL_PAGE_FRAME_SIZE);
+        let kernel_start_frame = kernel_bounds().0 / PAGE_SIZE;
+        let kernel_end_frame = kernel_bounds().1.div_ceil(PAGE_SIZE);
         allocator.mark_frames_used(kernel_start_frame..kernel_end_frame);
 
         // mark the multiboot info structure as used
-        let mb_start_frame = boot_info.start_address() / PHYSICAL_PAGE_FRAME_SIZE;
-        let mb_end_frame = boot_info.end_address().div_ceil(PHYSICAL_PAGE_FRAME_SIZE);
+        let mb_start_frame = boot_info.start_address() / PAGE_SIZE;
+        let mb_end_frame = boot_info.end_address().div_ceil(PAGE_SIZE);
         allocator.mark_frames_used(mb_start_frame..mb_end_frame);
 
         // mark the bitmap array itself as used
-        let bitmap_start_frame = bitmap_array_start_ptr as usize / PHYSICAL_PAGE_FRAME_SIZE;
+        let bitmap_start_frame = bitmap_array_start_ptr as usize / PAGE_SIZE;
         let bitmap_end_frame = (bitmap_array_start_ptr as usize + bitmap_array_size)
-            .div_ceil(PHYSICAL_PAGE_FRAME_SIZE);
+            .div_ceil(PAGE_SIZE);
         allocator.mark_frames_used(bitmap_start_frame..bitmap_end_frame);
 
         // mark the first frame as used to avoid allocating the null pointer
-        allocator.mark_frame_used(1);
+        allocator.mark_frame_used(0);
 
         allocator
     }

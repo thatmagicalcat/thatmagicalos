@@ -1,86 +1,69 @@
-use bitflags::bitflags;
+pub mod entry;
+pub mod mapper;
+pub mod table;
 
-use super::{Frame, PAGE_SIZE};
+pub use entry::*;
+pub use mapper::*;
+pub use table::*;
 
-mod table;
-
-const ENTRIES_PER_TABLE: usize = 512;
-const PHYSICAL_ADDRESS_MASK: u64 = 0xFFFFFFFFFF000;
-
-// pub type VirtAddr = usize;
-// pub type PhysAddr = usize;
+use core::ops::Deref;
 
 #[repr(transparent)]
-pub struct PhysAddr(usize);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PhysicalAddress(pub u64);
 
 #[repr(transparent)]
-pub struct VirtAddr(usize);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct VirtualAddress(pub u64);
 
-#[rustfmt::skip]
-impl VirtAddr {
-    pub fn p4_idx(&self) -> usize { self.0 >> 27 & 0o777 }
-    pub fn p3_idx(&self) -> usize { self.0 >> 18 & 0o777 }
-    pub fn p2_idx(&self) -> usize { self.0 >> 9  & 0o777 }
-    pub fn p1_idx(&self) -> usize { self.0 >> 0  & 0o777 }
-
-    pub fn containing_frame(&self) -> Frame {
-        const MIN: usize = 1 << 47;
-        const MAX: usize = !0 << 47;
-
-        assert!(
-            self.0 < MIN || self.0 >= MAX,
-            "virtual address out of range"
-        );
-
-        Frame::from_addr(self.0)
+impl<T> From<T> for PhysicalAddress
+where
+    T: Into<u64>,
+{
+    fn from(value: T) -> Self {
+        Self(value.into())
     }
 }
 
-bitflags! {
-    pub struct EntryFlags: u64 {
-        const PRESENT         = 1 << 0;
-        const WRITABLE        = 1 << 1;
-        const USER_ACCESSIBLE = 1 << 2;
-        const WRITE_THROUGH   = 1 << 3;
-        const CACHE_DISABLE   = 1 << 4;
-        const ACCESSED        = 1 << 5;
-        const DIRTY           = 1 << 6;
-        const HUGE_PAGE       = 1 << 7;
-        const GLOBAL          = 1 << 8;
-        const NO_EXECUTE      = 1 << 63;
-
-       /*
-        * 9 - 11 are available to be used by the OS
-        * 12 - 51 physical address
-        * 52 - 62 are available to be used by the OS
-        */
+impl<T> From<T> for VirtualAddress
+where
+    T: Into<u64>,
+{
+    fn from(value: T) -> Self {
+        Self(value.into())
     }
 }
 
-pub struct PageTableEntry(u64);
-impl PageTableEntry {
-    pub fn is_unused(&self) -> bool {
-        self.0 == 0
+impl Deref for PhysicalAddress {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Deref for VirtualAddress {
+    type Target = u64;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl VirtualAddress {
+    pub const fn p4_idx(&self) -> usize {
+        (self.0 as usize >> 39) & 0o777
     }
 
-    pub fn set_unused(&mut self) {
-        self.0 = 0;
+    pub const fn p3_idx(&self) -> usize {
+        (self.0 as usize >> 30) & 0o777
     }
 
-    pub fn flags(&self) -> EntryFlags {
-        EntryFlags::from_bits_truncate(self.0)
+    pub const fn p2_idx(&self) -> usize {
+        (self.0 as usize >> 21) & 0o777
     }
 
-    pub fn pointed_frame(&self) -> Option<Frame> {
-        if self.flags().contains(EntryFlags::PRESENT) {
-            Some(Frame::from_addr((self.0 & PHYSICAL_ADDRESS_MASK) as usize))
-        } else {
-            None
-        }
-    }
-
-    pub fn set(&mut self, frame: Frame, flags: EntryFlags) {
-        assert!(frame.start_address() & !PHYSICAL_ADDRESS_MASK as usize == 0);
-        self.0 = frame.start_address() as u64 | flags.bits();
+    pub const fn p1_idx(&self) -> usize {
+        (self.0 as usize >> 12) & 0o777
     }
 }
