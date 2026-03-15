@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![allow(unused)]
+#![warn(clippy::missing_const_for_fn)]
 #![feature(abi_x86_interrupt)]
 #![feature(custom_test_frameworks)]
 
@@ -46,6 +47,8 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
             area.typ()
         );
     }
+
+    breakpoint!();
 
     let mut frame_allocator = memory::BitmapFrameAllocator::new(&boot_info);
     let frame = frame_allocator.allocate_frame().unwrap();

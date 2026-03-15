@@ -11,6 +11,18 @@ macro_rules! println {
     ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
 }
 
+#[macro_export]
+macro_rules! breakpoint {
+    [] => {
+        unsafe {
+            core::arch::asm! {
+                "int3",
+                options(nomem, nostack)
+            }
+        };
+    };
+}
+
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;

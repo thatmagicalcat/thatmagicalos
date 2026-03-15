@@ -3,3 +3,6 @@ resolver = "2"
 members = [
     "kernel",
 ]
+
+[profile.release]
+debug = true
