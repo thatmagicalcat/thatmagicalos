@@ -3,16 +3,16 @@ use core::ops::Range;
 use multiboot2::MemoryAreaType;
 use x86_64::structures::paging::frame;
 
-use crate::kernel_bounds;
+use crate::{kernel_bounds, memory::FrameAllocator};
 
-use super::{PAGE_SIZE, Frame};
+use super::{Frame, PAGE_SIZE};
 
 const USED: u8 = !0;
 const FREE: u8 = 0;
 
 pub struct BitmapFrameAllocator {
     bitmap_slice: &'static mut [u8],
-    pub total_frames: usize,
+    total_frames: usize,
     last_allocated_frame: usize,
 }
 
@@ -71,8 +71,8 @@ impl BitmapFrameAllocator {
 
         // mark the bitmap array itself as used
         let bitmap_start_frame = bitmap_array_start_ptr as usize / PAGE_SIZE;
-        let bitmap_end_frame = (bitmap_array_start_ptr as usize + bitmap_array_size)
-            .div_ceil(PAGE_SIZE);
+        let bitmap_end_frame =
+            (bitmap_array_start_ptr as usize + bitmap_array_size).div_ceil(PAGE_SIZE);
         allocator.mark_frames_used(bitmap_start_frame..bitmap_end_frame);
 
         // mark the first frame as used to avoid allocating the null pointer
@@ -85,27 +85,18 @@ impl BitmapFrameAllocator {
         self.bitmap_slice
             .iter()
             .enumerate()
+            // start searching from the last allocated frame to improve performance
             .skip(offset)
-            .filter(|(_, byte)| **byte != !0)
+            // if bitmap byte is 0xFF, all frames in that byte are used, so skip it
+            .filter(|(_, byte)| **byte != !0) 
+            // once we stumble upon a byte that is not 0xFF, find the first free frame in that
+            // byte, that offset is just the number of trailing ones in that byte
             .map(|(byte_idx, byte)| Frame(byte_idx * 8 + byte.trailing_ones() as usize))
             .next()
             .inspect(|&Frame(frame_idx)| {
                 self.last_allocated_frame = frame_idx + 1;
                 self.mark_frame_used(frame_idx)
             })
-    }
-
-    pub fn allocate_frame(&mut self) -> Option<Frame> {
-        self.allocate_frame_helper(self.last_allocated_frame >> 3)
-            .or_else(|| self.allocate_frame_helper(0))
-    }
-
-    pub fn deallocate_frame(&mut self, Frame(frame_index): Frame) {
-        if frame_index >= self.total_frames {
-            panic!("Frame index out of bounds: {}", frame_index);
-        }
-
-        self.mark_frame_free(frame_index);
     }
 
     #[inline(always)]
@@ -146,5 +137,24 @@ impl BitmapFrameAllocator {
         let byte_index = frame_index >> 3;
         let bit_index = frame_index & 7;
         self.bitmap_slice[byte_index] &= !(1 << bit_index);
+    }
+
+    pub const fn total_frames(&self) -> usize {
+        self.total_frames
+    }
+}
+
+impl FrameAllocator for BitmapFrameAllocator {
+    fn allocate_frame(&mut self) -> Option<Frame> {
+        self.allocate_frame_helper(self.last_allocated_frame >> 3)
+            .or_else(|| self.allocate_frame_helper(0))
+    }
+
+    fn deallocate_frame(&mut self, Frame(frame_index): Frame) {
+        if frame_index >= self.total_frames {
+            panic!("Frame index out of bounds: {}", frame_index);
+        }
+
+        self.mark_frame_free(frame_index);
     }
 }
