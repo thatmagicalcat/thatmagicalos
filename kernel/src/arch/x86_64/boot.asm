@@ -166,6 +166,7 @@ enable_paging:
     mov ecx, 0xC0000080 ; IA32_EFER MSR
     rdmsr
     or eax, 1 << 8
+    or eax, 1 << 11 
     wrmsr
 
     ; enable paging in the cr0 register
