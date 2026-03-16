@@ -1,6 +1,7 @@
-pub mod entry;
-pub mod mapper;
-pub mod table;
+mod entry;
+mod mapper;
+mod table;
+pub mod remap;
 
 pub use entry::*;
 pub use mapper::*;
@@ -51,6 +52,14 @@ impl Deref for VirtualAddress {
 }
 
 impl VirtualAddress {
+    pub const fn as_ptr<T>(&self) -> *const T {
+        self.0 as *const T
+    }
+
+    pub const fn as_mut_ptr<T>(&self) -> *mut T {
+        self.0 as *mut T
+    }
+
     pub const fn p4_idx(&self) -> usize {
         (self.0 as usize >> 39) & 0o777
     }

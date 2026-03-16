@@ -5,29 +5,30 @@ use super::{
     entry::EntryFlags,
     table::{ENTRIES_PER_TABLE, L4, PageTable},
 };
-use crate::memory::{BitmapFrameAllocator, Frame, FrameAllocator};
+
+use crate::memory::{Frame, FrameAllocator};
 
 pub const P4: *mut PageTable<L4> = 0xFFFFFFFFFFFFF000 as *mut _;
 
-pub struct ActivePageTable {
+pub struct Mapper {
     p4: *mut PageTable<L4>,
 }
 
-impl ActivePageTable {
-    pub const fn new() -> Self {
-        Self { p4: P4 }
+impl Mapper {
+    pub const fn new(p4: *mut PageTable<L4>) -> Self {
+        Self { p4 }
     }
 
     pub const fn as_ref(&self) -> &'static PageTable<L4> {
         unsafe { &*self.p4 }
     }
 
-    pub const fn p4_mut(&mut self) -> &mut PageTable<L4> {
+    pub const fn as_mut(&mut self) -> &mut PageTable<L4> {
         unsafe { &mut *self.p4 }
     }
 
     pub fn translate(&mut self, virt_addr: VirtualAddress) -> Option<PhysicalAddress> {
-        let p3 = self.p4_mut().next_table(virt_addr.p4_idx() as _);
+        let p3 = self.as_mut().next_table(virt_addr.p4_idx() as _);
         let huge_pages = || {
             p3.and_then(|p3| {
                 let p3_entry = &p3[virt_addr.p3_idx()];
@@ -62,32 +63,33 @@ impl ActivePageTable {
 
         p3.and_then(|p3| p3.next_table(virt_addr.p3_idx()))
             .and_then(|p2| p2.next_table(virt_addr.p2_idx()))
-            .and_then(|p1| p1[{ virt_addr.p1_idx() }].get_pointed_frame())
+            .and_then(|p1| p1[virt_addr.p1_idx()].get_pointed_frame())
             .or_else(huge_pages)
             .map(|frame| PhysicalAddress(frame.start_address() as u64))
     }
 
-    pub fn map_to(
+    pub fn map_to<A: FrameAllocator>(
         &mut self,
         page: VirtualAddress,
         frame: Frame,
         flags: EntryFlags,
-        allocator: &mut BitmapFrameAllocator,
+        allocator: &mut A,
     ) {
-        let p4 = self.p4_mut();
-        let mut p3 = p4.next_table_create(page.p4_idx() as _, allocator);
-        let mut p2 = p3.next_table_create(page.p3_idx() as _, allocator);
-        let mut p1 = p2.next_table_create(page.p2_idx() as _, allocator);
+        let p4 = self.as_mut();
+        let p3 = p4.next_table_create(page.p4_idx() as _, allocator);
+        let p2 = p3.next_table_create(page.p3_idx() as _, allocator);
+        let p1 = p2.next_table_create(page.p2_idx() as _, allocator);
 
         assert!(p1[page.p1_idx()].is_unused());
         p1[page.p1_idx()].set(frame, flags | EntryFlags::PRESENT);
     }
 
-    pub fn unmap(&mut self, page: VirtualAddress, allocator: &mut BitmapFrameAllocator) {
+    #[must_use]
+    pub fn unmap(&mut self, page: VirtualAddress) -> Frame {
         assert!(self.translate(page).is_some());
 
         let p1 = self
-            .p4_mut()
+            .as_mut()
             .next_table_mut(page.p4_idx())
             .and_then(|p3| p3.next_table_mut(page.p3_idx()))
             .and_then(|p2| p2.next_table_mut(page.p2_idx()))
@@ -99,8 +101,8 @@ impl ActivePageTable {
         // TODO: deallocate empty page tables
         // but this is very expensive to do on every unmap...
 
-        allocator.deallocate_frame(frame);
-
-        unsafe { asm!("invlpg [{}]", in(reg) *page, options(nostack, preserves_flags)) };
+        // allocator.deallocate_frame(frame);
+        crate::flush_tlb!(*page);
+        frame
     }
 }

@@ -23,6 +23,34 @@ macro_rules! breakpoint {
     };
 }
 
+#[macro_export]
+macro_rules! flush_tlb {
+    // Flush all
+    [] => {
+        let value: u64;
+        unsafe {
+            asm! {
+                "mov {}, cr3",
+                out(reg) value,
+                options(nomem, nostack, preserves_flags)
+            }
+
+            asm! {
+                "mov cr3, {}",
+                in(reg) value,
+                options(nomem, nostack, preserves_flags)
+            }
+        };
+    };
+
+    // Flush a single page
+    [ $page:expr ] => {
+        unsafe {
+            asm!("invlpg [{}]", in(reg) $page, options(nostack, preserves_flags))
+        };
+    };
+}
+
 #[doc(hidden)]
 pub fn _print(args: core::fmt::Arguments) {
     use core::fmt::Write;

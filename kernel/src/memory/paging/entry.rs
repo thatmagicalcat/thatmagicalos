@@ -1,6 +1,8 @@
+use multiboot2::ElfSectionFlags;
+
 use crate::memory::Frame;
 
-const PHYSICAL_ADDRESS_MASK: u64 = 0xFFFFFFFFFF000;
+pub const PHYSICAL_ADDRESS_MASK: u64 = 0xFFFFFFFFFF000;
 
 bitflags::bitflags! {
     pub struct EntryFlags: u64 {
@@ -20,6 +22,26 @@ bitflags::bitflags! {
         * 12 - 51 physical address
         * 52 - 62 are available to be used by the OS
         */
+    }
+}
+
+impl EntryFlags {
+    pub fn from_elf_section_flags(section: &ElfSectionFlags) -> Self {
+        let mut flags = Self::empty();
+
+        if section.contains(ElfSectionFlags::ALLOCATED) {
+            flags |= Self::PRESENT;
+        }
+
+        if section.contains(ElfSectionFlags::WRITABLE) {
+            flags |= Self::WRITABLE;
+        }
+
+        if !section.contains(ElfSectionFlags::EXECUTABLE) {
+            flags |= Self::NO_EXECUTE;
+        }
+
+        flags
     }
 }
 
@@ -44,7 +66,7 @@ impl PageTableEntry {
         EntryFlags::from_bits_truncate(self.0)
     }
 
-    pub fn set_unused(&mut self) {
+    pub const fn set_unused(&mut self) {
         self.0 = 0;
     }
 
@@ -52,11 +74,11 @@ impl PageTableEntry {
         self.0 == 0
     }
 
-    pub fn set_flags(&mut self, flags: EntryFlags) {
+    pub const fn set_flags(&mut self, flags: EntryFlags) {
         self.0 |= flags.bits();
     }
 
-    pub fn clear_flags(&mut self, flags: EntryFlags) {
+    pub const fn clear_flags(&mut self, flags: EntryFlags) {
         self.0 &= !flags.bits();
     }
 
