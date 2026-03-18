@@ -50,10 +50,10 @@ struct ScreenChar {
 }
 
 impl ScreenChar {
-    fn black_whitespace() -> ScreenChar {
+    fn whitespace(color_code: ColorCode) -> ScreenChar {
         ScreenChar {
             ascii_character: b' ',
-            color_code: ColorCode::new(Color::Black, Color::Black),
+            color_code,
         }
     }
 }
@@ -84,7 +84,27 @@ impl Writer {
     pub fn initialize(&mut self) {
         for row in 0..BUFFER_HEIGHT {
             for col in 0..BUFFER_WIDTH {
-                self.buffer.chars[row][col].write(ScreenChar::black_whitespace());
+                self.buffer.chars[row][col].write(ScreenChar::whitespace(ColorCode::new(
+                    Color::Black,
+                    Color::Black,
+                )));
+            }
+        }
+    }
+
+    /// Changes the fg and bg color of entire screen without changing the content
+    pub fn change_screen_colors(&mut self, fg: Color, bg: Color) {
+        for row in 0..BUFFER_HEIGHT {
+            for col in 0..BUFFER_WIDTH {
+                let sch = &mut self.buffer.chars[row][col];
+                let ScreenChar {
+                    ascii_character, ..
+                } = sch.read();
+
+                sch.write(ScreenChar {
+                    ascii_character,
+                    color_code: ColorCode::new(fg, bg),
+                });
             }
         }
     }
@@ -127,7 +147,7 @@ impl Writer {
     fn new_line(&mut self) {
         self.buffer.chars.rotate_left(1);
         *unsafe { self.buffer.chars.last_mut().unwrap_unchecked() } =
-            [ScreenChar::black_whitespace().into(); BUFFER_WIDTH];
+            [ScreenChar::whitespace(self.color_code).into(); BUFFER_WIDTH];
         self.column_position = 0;
     }
 }
