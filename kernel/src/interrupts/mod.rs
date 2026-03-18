@@ -1,11 +1,7 @@
 use bitflags::bitflags;
 
-use crate::{
-    println,
-    vga_buffer::{Color, WRITER},
-};
+use crate::println;
 
-use table::*;
 pub use idt::IDT;
 
 #[macro_use]
