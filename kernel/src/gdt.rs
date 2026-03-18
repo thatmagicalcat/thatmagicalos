@@ -1,5 +1,7 @@
 //! source: https://wiki.osdev.org/Global_Descriptor_Table
 
+use crate::memory::PAGE_SIZE;
+
 static GDT: [GdtEntry; 3] = [
     GdtEntry::empty(),
     GdtEntry::new_code(),
@@ -8,7 +10,7 @@ static GDT: [GdtEntry; 3] = [
 
 // source: https://wiki.osdev.org/GDT_Tutorial#:~:text=reloadSegments%3A%20%3B%20Reload,RET
 pub fn init() {
-    let gdtR = GdtR {
+    let gdtr = GdtR {
         size: (core::mem::size_of_val(&GDT) - 1) as _,
         base: GDT.as_ptr() as _,
     };
@@ -17,20 +19,20 @@ pub fn init() {
         core::arch::asm! {
             "lgdt [{0}]",
 
-            "push 8",
+            "push 8",     // offset (in bytes) of code segment
             "lea {1}, [2f]",
             "push {1}",
             "retfq",
 
             "2:",
-            "mov ax, 16",
+            "mov ax, 16", // offset (in bytes) of data segment
             "mov ds, ax",
             "mov es, ax",
             "mov fs, ax",
             "mov gs, ax",
             "mov ss, ax",
 
-            in(reg) &gdtR,
+            in(reg) &gdtr,
             out(reg) _,
             out("ax") _,
 
