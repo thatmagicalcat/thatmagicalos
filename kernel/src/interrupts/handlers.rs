@@ -24,6 +24,10 @@ pub extern "C" fn divide_by_zero_handler(stack_frame: &ExceptionStackFrame) {
 }
 
 pub extern "C" fn page_fault_handler(stack_frame: &ExceptionStackFrame, error_code: u64) {
+    unsafe {
+        core::ptr::read_volatile(0xDEAD_BEEF_CAFE_BABE as *mut u64);
+    }
+
     let value: u64;
 
     unsafe {
