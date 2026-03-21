@@ -3,7 +3,7 @@ use core::task::Waker;
 use alloc::{sync::Arc, task::Wake};
 use crossbeam_queue::ArrayQueue;
 
-use crate::task::{Task, TaskId};
+use crate::task::TaskId;
 
 type TaskQueue = ArrayQueue<TaskId>;
 
@@ -21,7 +21,9 @@ struct TaskWaker {
 
 impl TaskWaker {
     fn wake_task(&self) {
-        self.ready_queue.push(self.task_id).expect("Task queue is full");
+        self.ready_queue
+            .push(self.task_id)
+            .expect("Task queue is full");
     }
 }
 
