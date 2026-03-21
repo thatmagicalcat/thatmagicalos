@@ -9,10 +9,11 @@ use alloc::boxed::Box;
 pub use executor::Executor;
 
 mod executor;
+pub mod keyboard;
 mod waker;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
-struct TaskId(u64);
+pub struct TaskId(u64);
 
 impl TaskId {
     pub fn new() -> Self {

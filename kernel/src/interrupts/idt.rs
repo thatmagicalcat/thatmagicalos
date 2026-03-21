@@ -12,6 +12,7 @@ pub const BREAKPOINT: u8 = 3;
 pub const DOUBLE_FAULT: u8 = 8;
 pub const SPURIOUS_INTERRUPT: u8 = 255;
 pub const APIC_TIMER: u8 = 32;
+pub const KEYBOARD: u8 = 33;
 
 pub const IST_STACK_SIZE: usize = PAGE_SIZE;
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
@@ -32,6 +33,7 @@ lazy_static::lazy_static! {
         idt.set_handler(BREAKPOINT, exception_handler!(breakpoint_handler));
         idt.set_handler(SPURIOUS_INTERRUPT, exception_handler!(spurious_interrupt_handler));
         idt.set_handler(APIC_TIMER, exception_handler!(apic_timer_handler));
+        idt.set_handler(KEYBOARD, exception_handler!(keyboard_handler));
         idt.set_handler(DOUBLE_FAULT, exception_handler_with_error_code!(double_fault_handler))
             .options_mut()
             .set_stack_index(1);

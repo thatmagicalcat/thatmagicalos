@@ -51,6 +51,10 @@ pub fn read(offset: usize) -> u32 {
     unsafe { register_ptr(offset).read_volatile() }
 }
 
+pub fn get_id() -> u8 {
+    (read(LAPIC_ID_REG_OFFSET) >> 24) as _
+}
+
 pub fn send_eoi() {
     write(LAPIC_EOI_REG_OFFSET, 0);
 }

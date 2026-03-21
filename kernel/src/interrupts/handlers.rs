@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use crate::{apic, print};
+use crate::{apic, print, port::Port};
 
 use super::*;
 
@@ -60,5 +60,11 @@ pub extern "C" fn spurious_interrupt_handler(stack_frame: &ExceptionStackFrame) 
 
 pub extern "C" fn apic_timer_handler(_stack_frame: &ExceptionStackFrame) {
     apic::send_eoi();
-    print!(".");
+}
+
+pub extern "C" fn keyboard_handler(_stack_frame: &ExceptionStackFrame) {
+    let scancode = unsafe { u8::read_from_port(0x60) };
+    crate::task::keyboard::add_scancode(scancode);
+
+    apic::send_eoi();
 }
