@@ -34,6 +34,13 @@ pub fn register(ioapic: IoApic) {
 }
 
 pub fn enable_irq(gsi: usize, vector: u8, apic_id: u8) {
+    log::debug!(
+        "Enabling IRQ for GSI {} with vector {} on APIC ID {}",
+        gsi,
+        vector,
+        apic_id
+    );
+
     let ioapics = IOAPICS.lock();
     for ioapic in ioapics.iter() {
         if gsi >= ioapic.gsi_base && gsi < ioapic.gsi_base + (ioapic.max_entires as usize) {
@@ -110,8 +117,13 @@ impl IoApic {
         physical_addr: usize,
         gsi_base: usize,
         mapper: &mut Mapper,
+        apic_id: u8,
         allocator: &mut A,
     ) -> Self {
+        log::info!(
+            "Found IO APIC: id = {apic_id}, address = {physical_addr:#010x}, gsi_base = {gsi_base:#010x}",
+        );
+
         let frame = Frame::from_addr(utils::align_down(physical_addr, memory::PAGE_SIZE));
         mapper.map_to(
             VirtualAddress(physical_addr as _),
@@ -130,7 +142,8 @@ impl IoApic {
             apic_id: 0,
         };
 
-        this.apic_id = (this.read_register(IOAPICID_INDEX) >> 24) as u8;
+        this.apic_id = apic_id;
+        // this.apic_id = (this.read_register(IOAPICID_INDEX) >> 24) as u8;
         this.max_entires = (this.read_register(IOAPICVER_INDEX) >> 16) as u8 + 1;
 
         this

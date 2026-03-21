@@ -47,6 +47,32 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
 
     gdt::init();
 
+    register_ioapics(boot_info, allocator, active_table);
+
+    // enable keyboard interrupt
+    // TODO: find the correct GSI for the keyboard instead of hardcoding it to 1
+    ioapic::enable_irq(1, interrupts::KEYBOARD, apic::get_id());
+
+    apic::init();
+
+    // TODO: do proper calibration of the timer frequency
+    apic::init_timer(
+        apic::DivideConfig::DIVIDE_BY_16,
+        10_000_000,
+        apic::LvtTimerMode::PERIODIC,
+    );
+
+    let mut executor = task::Executor::new();
+    executor.spawn(task::keyboard::print_keypresses());
+    executor.run();
+}
+
+fn register_ioapics(
+    boot_info: multiboot2::BootInformation<'_>,
+    mut allocator: memory::BitmapFrameAllocator,
+    mut active_table: memory::paging::ActivePageTable,
+) {
+    log::info!("Parsing ACPI tables to find IO APIC information");
     let (rev, rsdt_address) = boot_info
         .rsdp_v2_tag()
         .map(|tag| {
@@ -59,6 +85,12 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
         })
         .or_else(|| boot_info.rsdp_v1_tag().map(|tag| (0, tag.rsdt_address())))
         .expect("Failed to find RSDP tag in multiboot2 info");
+
+    log::info!(
+        "ACPI revision: {}, RSDT/XSDT address: {:#010x}",
+        rev,
+        rsdt_address
+    );
 
     let acpi_tables = unsafe {
         acpi::AcpiTables::from_rsdt(
@@ -77,6 +109,8 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
         panic!("Unsupported interrupt model");
     };
 
+    log::info!("Registering IO APICs...");
+
     apic_info
         .io_apics
         .iter()
@@ -85,28 +119,11 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
                 apic_info.address as usize,
                 apic_info.global_system_interrupt_base as usize,
                 active_table.mapper_mut(),
+                apic_info.id,
                 &mut allocator,
             )
         })
         .for_each(ioapic::register);
-
-    // enable keyboard interrupt
-    // TODO: find the correct GSI for the keyboard instead of hardcoding it to 1
-    ioapic::enable_irq(1, interrupts::KEYBOARD, apic::get_id());
-
-    apic::init();
-
-    // TODO: do proper calibration of the timer frequency
-    apic::init_timer(
-        apic::DivideConfig::DIVIDE_BY_16,
-        10_000_000,
-        apic::LvtTimerMode::PERIODIC,
-    );
-
-    let mut executor = task::Executor::new();
-    executor.spawn(task::keyboard::print_keypresses());
-
-    executor.run();
 }
 
 unsafe extern "C" {
