@@ -1,6 +1,10 @@
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use bitflags::bitflags;
 
-use crate::{interrupts, port::Port, utils::rdmsr};
+use crate::{hpet::Hpet, interrupts, port::Port, utils::rdmsr};
+
+static LAPIC_TIMER_FREQ: AtomicU64 = AtomicU64::new(0);
 
 pub const PIC1: u16 = 0x20;
 pub const PIC2: u16 = 0xA0;
@@ -19,6 +23,7 @@ pub const LAPIC_SIVR_REG_OFFSET: usize = 0xF0;
 pub const LAPIC_ID_REG_OFFSET: usize = 0x20;
 pub const LAPIC_DIVIDE_CONFIG_REG_OFFSET: usize = 0x3E0;
 pub const LAPIC_INITIAL_COUNT_REG_OFFSET: usize = 0x380;
+pub const LAPIC_CURRENT_COUNT_REG_OFFSET: usize = 0x390;
 pub const LAPIC_LVT_TIMER_REG_OFFSET: usize = 0x320;
 
 bitflags! {
@@ -45,11 +50,11 @@ const fn register_ptr(offset: usize) -> *mut u32 {
     (LAPIC_PHYSICAL_ADDRESS_DEFAULT + offset) as *mut _
 }
 
-pub fn write(offset: usize, value: u32) {
+fn write(offset: usize, value: u32) {
     unsafe { register_ptr(offset).write_volatile(value) };
 }
 
-pub fn read(offset: usize) -> u32 {
+fn read(offset: usize) -> u32 {
     unsafe { register_ptr(offset).read_volatile() }
 }
 
@@ -69,20 +74,50 @@ pub fn init() {
     lapic_enable();
 }
 
-pub fn init_timer(divide_config: DivideConfig, initial_count: u32, mode: LvtTimerMode) {
-    log::info!(
-        "Initializing Local APIC timer with divide config {:?}, initial count {}, and mode {:?}",
-        divide_config,
-        initial_count,
-        mode
+pub fn set_timer(divide_config: DivideConfig, initial_count: u32, mode: LvtTimerMode) {
+    log::trace!(
+        "Scheduling LAPIC timer with initial count {initial_count}, {divide_config:?}, {mode:?}"
     );
 
-    write(LAPIC_DIVIDE_CONFIG_REG_OFFSET, divide_config.bits());
-    write(LAPIC_INITIAL_COUNT_REG_OFFSET, initial_count);
-    write(
-        LAPIC_LVT_TIMER_REG_OFFSET,
-        mode.bits() | interrupts::APIC_TIMER as u32,
-    );
+    interrupts::without_interrupts(|| {
+        write(LAPIC_DIVIDE_CONFIG_REG_OFFSET, divide_config.bits());
+        write(LAPIC_INITIAL_COUNT_REG_OFFSET, initial_count);
+        write(
+            LAPIC_LVT_TIMER_REG_OFFSET,
+            mode.bits() | interrupts::InterruptEntryType::ApicTimer as u32,
+        );
+    });
+}
+
+pub fn calibrate_lapic_timer(hpet: &Hpet) {
+    log::info!("Calibrating LAPIC timer frequency using HPET...");
+
+    set_timer(DivideConfig::DIVIDE_BY_1, !0, LvtTimerMode::PERIODIC);
+
+    // calibrate the HPET timer frequency
+    let apic_freq = interrupts::without_interrupts(|| {
+        let apic_timestamp_before = read_timer_count();
+
+        // sleep for 10ms using HPET and measure how many APIC timer ticks have passed
+        let sleep_duration = core::time::Duration::from_millis(10);
+        hpet.sleep(sleep_duration);
+
+        let apic_timestamp_after = read_timer_count();
+        let apic_ticks = apic_timestamp_before - apic_timestamp_after;
+
+        (apic_ticks * 1000) / sleep_duration.as_millis() as u32
+    });
+
+    log::info!("Calibrated LAPIC timer frequency: {apic_freq} Hz");
+    LAPIC_TIMER_FREQ.store(apic_freq as _, Ordering::Relaxed);
+}
+
+pub fn read_timer_count() -> u32 {
+    read(LAPIC_CURRENT_COUNT_REG_OFFSET)
+}
+
+pub fn get_timer_frequency() -> u64 {
+    LAPIC_TIMER_FREQ.load(Ordering::Relaxed)
 }
 
 fn pic_disable() {

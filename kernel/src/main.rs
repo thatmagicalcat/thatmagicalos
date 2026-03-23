@@ -71,12 +71,7 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
     );
 
     apic::init();
-    // TODO: do proper calibration of the timer frequency
-    apic::init_timer(
-        apic::DivideConfig::DIVIDE_BY_16,
-        10_000_000,
-        apic::LvtTimerMode::PERIODIC,
-    );
+    apic::calibrate_lapic_timer(hpet);
 
     let mut executor = task::Executor::new();
     executor.spawn(task::keyboard::print_keypresses());
