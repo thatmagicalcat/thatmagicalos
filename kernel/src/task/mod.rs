@@ -10,6 +10,7 @@ pub use executor::Executor;
 
 mod executor;
 pub mod keyboard;
+pub mod timer;
 mod waker;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]

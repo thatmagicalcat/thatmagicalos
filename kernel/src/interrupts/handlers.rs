@@ -1,5 +1,7 @@
 use core::arch::asm;
 
+use spin::Mutex;
+
 use crate::{apic, port::Port};
 
 use super::*;
@@ -59,6 +61,7 @@ pub extern "C" fn spurious_interrupt_handler(stack_frame: &ExceptionStackFrame) 
 }
 
 pub extern "C" fn apic_timer_handler(_stack_frame: &ExceptionStackFrame) {
+    crate::task::timer::TIMER_WAKER.wake();
     apic::send_eoi();
 }
 

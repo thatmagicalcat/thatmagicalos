@@ -4,6 +4,10 @@
 #![warn(clippy::missing_const_for_fn)]
 #![allow(clippy::empty_loop, unused)]
 
+use core::time::Duration;
+
+use crate::task::timer;
+
 const MIN_LOG_LEVEL: log::LevelFilter = log::LevelFilter::Trace;
 
 extern crate alloc;
@@ -74,8 +78,24 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
     apic::calibrate_lapic_timer(hpet);
 
     let mut executor = task::Executor::new();
-    executor.spawn(task::keyboard::print_keypresses());
 
+    // responsible for handling sleep timers
+    executor.spawn(timer::timer_dispatch());
+
+    executor.spawn(async {
+        timer::sleep(Duration::from_secs(1)).await;
+        println!("Task 1");
+    });
+
+    executor.spawn(async {
+        timer::sleep(Duration::from_secs(2)).await;
+        println!("Task 2");
+    });
+
+    executor.spawn(async {
+        timer::sleep(Duration::from_secs(3)).await;
+        println!("Task 3");
+    });
 
     executor.run();
 }
