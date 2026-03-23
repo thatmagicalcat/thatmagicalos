@@ -24,7 +24,7 @@ pub fn add_scancode(scancode: u8) {
         return;
     }
 
-    log::warn!("Scancode queue uninitialized");
+    log::warn!("Scancode queue uninitialized; dropping keyboard input");
 }
 
 pub struct ScancodeStream {
@@ -53,6 +53,8 @@ impl Stream for ScancodeStream {
         }
 
         WAKER.register(ctx.waker());
+
+        // double check
         match queue.pop() {
             Some(scancode) => {
                 _ = WAKER.take();

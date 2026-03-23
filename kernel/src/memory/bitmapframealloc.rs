@@ -45,9 +45,9 @@ impl BitmapFrameAllocator {
         bitmap_slice.fill(USED);
 
         log::debug!(
-            "Bitmap frame allocator initialized with total frames: {}, bitmap size: {} bytes, bitmap start: {:#X}",
+            "Bitmap frame allocator initialized with total frames: {}, bitmap size: {} KiB, bitmap start: {:#X}",
             total_frames,
-            bitmap_array_size,
+            bitmap_array_size / 1024,
             bitmap_array_start_ptr as usize
         );
 

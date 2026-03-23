@@ -34,7 +34,7 @@ impl Mapper {
             p3.and_then(|p3| {
                 let p3_entry = &p3[virt_addr.p3_idx()];
 
-                // 1 GiB page?!?!
+                // 1 GiB page?!?! what the fuck?
                 if let Some(start_frame) = p3_entry.get_pointed_frame()
                     && p3_entry.flags().contains(EntryFlags::HUGE_PAGE)
                 {
@@ -88,7 +88,7 @@ impl Mapper {
         flags: EntryFlags,
         allocator: &mut A,
     ) {
-        log::trace!("map(): {:#010x} -> {:#010x}, flags = {flags:?}", page.0, frame.0);
+        log::trace!("map(): {:#010x} -> {:#010x}, flags = {flags:?}", page.0, frame.start_address());
 
         let p4 = self.as_mut();
         let p3 = p4.next_table_create(page.p4_idx() as _, allocator);

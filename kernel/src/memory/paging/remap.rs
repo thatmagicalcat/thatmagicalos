@@ -22,15 +22,15 @@ where
     let new_table = InactivePageTable::new(frame, &mut active_page_tbl, tmp_addr, allocator);
 
     active_page_tbl.with(&new_table, tmp_addr, allocator, |mapper, allocator| {
-        log::info!("Remapping kernel sections");
+        log::info!("Mapping kernel sections");
         map_kernel_sections(boot_info, mapper, allocator);
-        log::info!("Remapping VGA buffer");
+        log::info!("Mapping VGA buffer");
         map_vga_buffer(mapper, allocator);
-        log::info!("Remapping multiboot info");
+        log::info!("Mapping multiboot info");
         map_multiboot_info(boot_info, mapper, allocator);
-        log::info!("Remapping bitmap allocator");
+        log::info!("Mapping bitmap allocator");
         map_allocator(mapper, allocator);
-        log::info!("Remapping LAPIC");
+        log::info!("Mapping LAPIC");
         map_lapic(mapper, allocator);
     });
 

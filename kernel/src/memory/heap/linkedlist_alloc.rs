@@ -38,7 +38,7 @@ impl LinkedListAllocator {
 
     pub fn init(&mut self, heap_start: *mut u8, heap_size: usize) {
         log::info!(
-            "Initializing LinkedListAllocator with heap start at {:#010x} and size {} KB",
+            "Initializing LinkedListAllocator with heap start at {:#010x} and size {} KiB",
             heap_start as usize,
             heap_size / 1024
         );
