@@ -9,11 +9,12 @@ mkdir -p $PROJECT_ROOT/build/isodir/boot/grub
 cp $KERNEL_PATH $PROJECT_ROOT/build/isodir/boot/kernel
 cp $PROJECT_ROOT/grub.cfg $PROJECT_ROOT/build/isodir/boot/grub/
 
-grub-mkrescue -o $PROJECT_ROOT/build/magical.iso $PROJECT_ROOT/build/isodir
+grub-mkrescue -o $PROJECT_ROOT/build/magical.iso $PROJECT_ROOT/build/isodir 2> /dev/null
 
-echo "Launching QEMU"
+echo "Launching QEMU..."
 qemu-system-x86_64     \
     -m 2G              \
     -enable-kvm        \
     -debugcon stdio    \
+    -cpu host          \
     -cdrom $PROJECT_ROOT/build/magical.iso
