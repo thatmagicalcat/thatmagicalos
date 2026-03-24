@@ -17,4 +17,5 @@ qemu-system-x86_64     \
     -enable-kvm        \
     -debugcon stdio    \
     -cpu host          \
+    -display sdl \
     -cdrom $PROJECT_ROOT/build/magical.iso
