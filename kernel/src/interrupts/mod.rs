@@ -8,6 +8,9 @@ mod handlers;
 mod idt;
 mod table;
 
+#[macro_use]
+mod macros;
+
 pub use idt::*;
 
 pub fn init() {
