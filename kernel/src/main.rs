@@ -27,7 +27,9 @@ mod io;
 mod ioapic;
 mod macros;
 mod memory;
+mod scheduler;
 mod task;
+mod thread;
 mod utils;
 mod vga_buffer;
 mod volatile;
@@ -61,6 +63,7 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
     let hpet_info =
         acpi::HpetInfo::new(&acpi_tables).expect("Failed to find HPET info in ACPI tables");
     log::info!("HPET info: {:?}", hpet_info);
+
     let base_addr = hpet_info.base_address as usize;
     let hpet = hpet::HPET
         .call_once(|| hpet::Hpet::new(base_addr, active_table.mapper_mut(), &mut allocator));
@@ -78,24 +81,44 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
     io::apic::init();
     io::apic::calibrate_lapic_timer(hpet);
 
-    let mut executor = task::Executor::new();
-    // responsible for handling sleep timers
-    executor.spawn(timer::timer_dispatch());
+    let timer_cfg = utils::duration_to_timer_config(
+        Duration::from_millis(10).as_nanos() as _,
+        io::apic::get_timer_frequency(),
+    )
+    .expect("Duration too long to convert to ticks");
 
-    async fn f(secs: u64) {
-        sleep(Duration::from_secs(secs)).await;
-        println!("Printing after {secs} seconds");
+    scheduler::init();
+    scheduler::spawn(thread::Thread::new(f1));
+
+    // TODO: Fix timer_dispatch of async executor, add a unified timer module which manages LAPIC timer setup
+    scheduler::spawn(thread::Thread::new(|| {
+        let mut executor = task::Executor::new();
+        executor.spawn(task::keyboard::print_keypresses());
+        executor.run();
+    }));
+
+    // slap kernel after every 10ms :)
+    io::apic::set_timer(
+        timer_cfg.divide_config,
+        timer_cfg.initial_count,
+        io::apic::LvtTimerMode::PERIODIC,
+    );
+
+    interrupts::enable_interrupts();
+
+    loop {
+        unsafe { core::arch::asm!("hlt") }
     }
+}
 
-    executor.spawn(f(1));
-    executor.spawn(f(2));
-    executor.spawn(f(3));
-    executor.spawn(f(4));
-    executor.spawn(f(5));
-    executor.spawn(f(6));
-    executor.spawn(f(7));
+fn f1() {
+    let mut count = 0;
 
-    executor.run();
+    loop {
+        scheduler::sleep(Duration::from_millis(100));
+        count += 1;
+        println!("{count}");
+    }
 }
 
 fn register_ioapics(
