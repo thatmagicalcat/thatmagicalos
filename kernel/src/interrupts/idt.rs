@@ -2,7 +2,7 @@ use core::arch::naked_asm;
 
 use spin::Lazy;
 
-use crate::memory::PAGE_SIZE;
+use crate::{memory::PAGE_SIZE, exception_handler, exception_handler_with_error_code};
 
 use super::{handlers::*, table::Idt};
 
@@ -13,9 +13,11 @@ pub enum InterruptEntryType {
     PageFault = 14,
     Breakpoint = 3,
     DoubleFault = 8,
-    SpuriousInterrupt = 255,
+    GeneralProtectionFault = 13,
     ApicTimer = 32,
     Keyboard = 33,
+    Reschedule = 34,
+    SpuriousInterrupt = 255,
 }
 
 pub const IST_STACK_SIZE: usize = PAGE_SIZE;
@@ -34,13 +36,15 @@ lazy_static::lazy_static! {
 
         use InterruptEntryType::*;
 
-        idt.set_handler(DivideByZero, divide_by_zero_handler as *const () as usize);
-        idt.set_handler(PageFault, page_fault_handler as *const () as usize);
-        idt.set_handler(Breakpoint, breakpoint_handler as *const () as usize);
-        idt.set_handler(SpuriousInterrupt, spurious_interrupt_handler as *const () as usize);
-        idt.set_handler(ApicTimer, apic_timer_handler as *const () as usize);
-        idt.set_handler(Keyboard, keyboard_handler as *const () as usize);
-        idt.set_handler(DoubleFault, double_fault_handler as *const () as usize)
+        idt.set_handler(DivideByZero, exception_handler!(divide_by_zero_handler));
+        idt.set_handler(PageFault, exception_handler_with_error_code!(page_fault_handler));
+        idt.set_handler(Breakpoint, exception_handler!(breakpoint_handler));
+        idt.set_handler(SpuriousInterrupt, exception_handler!(spurious_interrupt_handler));
+        idt.set_handler(Keyboard, exception_handler!(keyboard_handler));
+        idt.set_handler(GeneralProtectionFault, exception_handler_with_error_code!(general_protection_fault_handler));
+        idt.set_handler(ApicTimer, apic_timer_wrapper);
+        idt.set_handler(Reschedule, reschedule_wrapper);
+        idt.set_handler(DoubleFault, exception_handler_with_error_code!(double_fault_handler))
             .options_mut()
             .set_stack_index(1);
 
