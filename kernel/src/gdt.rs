@@ -8,6 +8,10 @@ use crate::interrupts::{Tss, TSS};
 const GDT_SIZE: usize = 5;
 static GDT: Once<[GdtEntry; GDT_SIZE]> = Once::new();
 
+pub const KERNEL_CODE_SELECTOR: u16 = 8;
+pub const KERNEL_DATA_SELECTOR: u16 = 16;
+pub const TSS_SELECTOR: u16 = 24;
+
 fn gdt() -> &'static [GdtEntry; GDT_SIZE] {
     GDT.call_once(|| {
         let (tss_low, tss_high) = GdtEntry::tss_seg(&TSS);
