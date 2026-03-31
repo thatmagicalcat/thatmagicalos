@@ -77,13 +77,20 @@ pub async fn print_keypresses() {
 
     while let Some(scancode) = scancodes.next().await {
         if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-            println!("KEYBOARD KEY IS PRESSED!!!!!!!");
-            // if let Some(key) = keyboard.process_keyevent(key_event.clone()) {
-            //     match key {
-            //         DecodedKey::Unicode(character) => print!("{}", character),
-            //         DecodedKey::RawKey(key) => print!("{:?}", key),
-            //     }
-            // }
+            let mut writer_lock = crate::interrupts::without_interrupts(|| crate::vga_buffer::WRITER.lock());
+            writer_lock.set_color(crate::vga_buffer::Color::Cyan, crate::vga_buffer::Color::Black);
+            drop(writer_lock);
+
+            if let Some(key) = keyboard.process_keyevent(key_event.clone()) {
+                match key {
+                    DecodedKey::Unicode(character) => println!("{}", character),
+                    DecodedKey::RawKey(key) => println!("{:?}", key),
+                }
+            }
+
+            let mut writer_lock = crate::interrupts::without_interrupts(|| crate::vga_buffer::WRITER.lock());
+            writer_lock.set_color(crate::vga_buffer::Color::Pink, crate::vga_buffer::Color::Black);
+
             //
             // println!(" :: {key_event:?}");
         }
