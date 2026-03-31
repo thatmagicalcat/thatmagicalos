@@ -1,13 +1,14 @@
 #![no_std]
 #![no_main]
-#![feature(allocator_api)]
-#![feature(abi_x86_interrupt)]
 #![warn(clippy::missing_const_for_fn)]
 #![allow(clippy::empty_loop)]
 
 use core::time::Duration;
 
-use crate::task::timer::{self, sleep};
+use crate::{
+    task::timer::{self, sleep},
+    thread::Thread,
+};
 
 #[rustfmt::skip]
 const MIN_LOG_LEVEL: log::LevelFilter = {
@@ -64,7 +65,7 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
         acpi::HpetInfo::new(&acpi_tables).expect("Failed to find HPET info in ACPI tables");
     log::info!("HPET info: {:?}", hpet_info);
 
-    let base_addr = hpet_info.base_address as usize;
+    let base_addr = hpet_info.base_address;
     let hpet = hpet::HPET
         .call_once(|| hpet::Hpet::new(base_addr, active_table.mapper_mut(), &mut allocator));
 
@@ -78,6 +79,12 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
         io::apic::get_id(),
     );
 
+    let pci_devices = io::pci::enumerate();
+    log::info!("Found {} PCI devices:", pci_devices.len());
+    for device in pci_devices {
+        log::info!("  - {}", device);
+    }
+
     io::apic::init();
     io::apic::calibrate_lapic_timer(hpet);
 
@@ -88,12 +95,15 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
     .expect("Duration too long to convert to ticks");
 
     scheduler::init();
-    scheduler::spawn(thread::Thread::new(f1));
 
-    // TODO: Fix timer_dispatch of async executor, add a unified timer module which manages LAPIC timer setup
-    scheduler::spawn(thread::Thread::new(|| {
+    scheduler::spawn(Thread::new(|| f(Duration::from_millis(200), "Thread 1 ->")));
+    scheduler::spawn(Thread::new(|| f(Duration::from_millis(200), "Thread 2 ->")));
+
+    scheduler::spawn(Thread::new(|| {
         let mut executor = task::Executor::new();
+
         executor.spawn(task::keyboard::print_keypresses());
+
         executor.run();
     }));
 
@@ -104,6 +114,7 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
         io::apic::LvtTimerMode::PERIODIC,
     );
 
+    // start slapping lol!
     interrupts::enable_interrupts();
 
     loop {
@@ -111,13 +122,13 @@ pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
     }
 }
 
-fn f1() {
+fn f(d: Duration, msg: &str) {
     let mut count = 0;
 
     loop {
-        scheduler::sleep(Duration::from_millis(100));
+        scheduler::sleep(d);
         count += 1;
-        println!("{count}");
+        println!("{msg} {count}");
     }
 }
 
@@ -224,7 +235,7 @@ fn log_memory_areas(boot_info: &multiboot2::BootInformation<'_>) {
 
 #[panic_handler]
 fn panic(info: &core::panic::PanicInfo) -> ! {
-    let mut writer_lock = vga_buffer::WRITER.lock();
+    let mut writer_lock = interrupts::without_interrupts(|| vga_buffer::WRITER.lock());
 
     writer_lock.change_screen_colors(vga_buffer::Color::White, vga_buffer::Color::Red);
     writer_lock.set_color(vga_buffer::Color::Yellow, vga_buffer::Color::Red);
