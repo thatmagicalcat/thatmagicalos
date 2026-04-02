@@ -12,8 +12,8 @@ use crate::{
 mod linkedlist_alloc;
 pub use linkedlist_alloc::LinkedListAllocator;
 
-// 100 KiB
-pub const HEAP_SIZE: usize = 100 * 1024;
+// 100 MiB
+pub const HEAP_SIZE: usize = 100 * 1024 * 1024;
 pub const HEAP_START: usize = 0o0_000_010_000_000_000;
 
 #[global_allocator]

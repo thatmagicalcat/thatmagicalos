@@ -44,7 +44,7 @@ impl BitmapFrameAllocator {
 
         bitmap_slice.fill(USED);
 
-        log::debug!(
+        log::info!(
             "Bitmap frame allocator initialized with total frames: {}, bitmap size: {} KiB, bitmap start: {:#X}",
             total_frames,
             bitmap_array_size / 1024,
@@ -164,7 +164,7 @@ impl FrameAllocator for BitmapFrameAllocator {
             let allocated_size_kb = self.allocated_frames * PAGE_SIZE / 1024;
             let total_size_kb = self.total_frames * PAGE_SIZE / 1024;
 
-            log::debug!(
+            log::trace!(
                 "allocate_frame(): [{}/{}] ({} KiB used / {} KiB free), last allocated frame: {}",
                 self.allocated_frames,
                 self.total_frames,
@@ -179,7 +179,7 @@ impl FrameAllocator for BitmapFrameAllocator {
     }
 
     fn deallocate_frame(&mut self, Frame(frame_index): Frame) {
-        log::debug!("deallocate_frame({})", frame_index);
+        log::trace!("deallocate_frame({})", frame_index);
 
         if frame_index >= self.total_frames {
             panic!("Frame index out of bounds: {}", frame_index);
