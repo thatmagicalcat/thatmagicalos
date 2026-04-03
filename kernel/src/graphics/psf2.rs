@@ -2,7 +2,7 @@ use core::{mem, ops::Index, ptr};
 
 use alloc::{collections::BTreeMap, vec::Vec};
 
-use crate::graphics::{FrameBuffer, FrameBufferInfo, WindowConsole};
+use crate::graphics::WindowConsole;
 
 type PixelFormat = u32;
 
@@ -117,6 +117,25 @@ impl PSF2Font {
             bytes_per_glyph: header.bytes_per_glyph as usize,
             unicode_map,
         })
+    }
+
+    pub fn reorder_glyphs(&mut self) {
+        let mut new_glyph_bytes = alloc::vec![0; self.glyph_bytes.len()];
+
+        for (ch, idx) in &self.unicode_map {
+            let new_idx = *ch as usize;
+            if new_idx < self.glyph_count() {
+                let old_start = idx * self.bytes_per_glyph;
+                let old_end = old_start + self.bytes_per_glyph;
+                let new_start = new_idx * self.bytes_per_glyph;
+                let new_end = new_start + self.bytes_per_glyph;
+
+                new_glyph_bytes[new_start..new_end]
+                    .copy_from_slice(&self.glyph_bytes[old_start..old_end]);
+            }
+        }
+
+        self.glyph_bytes = new_glyph_bytes;
     }
 
     fn parse_unicode_table(
