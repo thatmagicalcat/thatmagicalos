@@ -3,26 +3,6 @@
 #![warn(clippy::missing_const_for_fn)]
 #![allow(clippy::empty_loop)]
 
-#[rustfmt::skip]
-const MIN_LOG_LEVEL: log::LevelFilter = {
-    #[cfg(log_level = "trace")] { log::LevelFilter::Trace }
-    #[cfg(log_level = "debug")] { log::LevelFilter::Debug }
-    #[cfg(log_level = "info")] { log::LevelFilter::Info }
-    #[cfg(log_level = "warn")] { log::LevelFilter::Warn }
-    #[cfg(log_level = "error")] { log::LevelFilter::Error }
-};
-
-/// The virtual address where the Linear framebuffer is mapped
-const LFB_VIRT_ADDR: usize = 0xFFFF_8000_0000_0000;
-
-const WALLPAPER_DATA: &[u8] = include_bytes!("../../wallpaper.bin");
-const FONT_DATA: &[u8] = include_bytes!("../../ter-u32n.psf");
-
-unsafe extern "C" {
-    static kernel_start: [u8; 0];
-    static kernel_end: [u8; 0];
-}
-
 extern crate alloc;
 
 mod gdt;
@@ -38,50 +18,68 @@ mod scheduler;
 mod task;
 mod thread;
 mod utils;
-mod vga_buffer;
 mod volatile;
 
+use limine::{BaseRevision, RequestsEndMarker, RequestsStartMarker, request::*};
+
+#[rustfmt::skip]
+const MIN_LOG_LEVEL: log::LevelFilter = {
+    #[cfg(log_level = "trace")] { log::LevelFilter::Trace }
+    #[cfg(log_level = "debug")] { log::LevelFilter::Debug }
+    #[cfg(log_level = "info")] { log::LevelFilter::Info }
+    #[cfg(log_level = "warn")] { log::LevelFilter::Warn }
+    #[cfg(log_level = "error")] { log::LevelFilter::Error }
+};
+
+/// The virtual address where the Linear framebuffer is mapped
+const LFB_VIRT_ADDR: usize = 0xFFFF_8000_0000_0000;
+
+const WALLPAPER_DATA: &[u8] = include_bytes!("../../wallpaper.bin");
+const FONT_DATA: &[u8] = include_bytes!("../../ter-u32n.psf");
+
+#[used]
+#[unsafe(link_section = ".limine_requests_start")]
+static REQUESTS_START: RequestsStartMarker = RequestsStartMarker::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests")]
+static BASE_REVISION: BaseRevision = BaseRevision::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests")]
+static FRAMEBUFFER_REQUEST: FramebufferRequest = FramebufferRequest::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests")]
+static BOOTLOADER: BootloaderInfoRequest = BootloaderInfoRequest::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests")]
+static HHDM_REQUEST: HhdmRequest = HhdmRequest::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests")]
+static MEMMAP: MemmapRequest = MemmapRequest::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests")]
+static RSDP_REQUEST: RsdpRequest = RsdpRequest::new();
+
+#[used]
+#[unsafe(link_section = ".limine_requests_end")]
+static REQUESTS_END: RequestsEndMarker = RequestsEndMarker::new();
+
 #[unsafe(no_mangle)]
-pub extern "C" fn kernel_main(multiboot_info_addr: u32) -> ! {
-    kernel::init(multiboot_info_addr);
+pub extern "C" fn kmain() -> ! {
+    kernel::init();
 
-    let mut locked = graphics::get_window_console().lock();
+    assert!(BASE_REVISION.is_supported(), "Limine base revision not supported");
 
-    // load the wallpaper
-    for y in 0..locked.info.height {
-        for x in 0..locked.info.width {
-            let idx = (y * locked.info.width + x) as usize;
-            let pixel_data = &WALLPAPER_DATA[idx * 4..idx * 4 + 4];
-            let color = u32::from_le_bytes(pixel_data.try_into().unwrap());
-
-            let r = ((color >> locked.info.r_shift) & 0xFF) as u8;
-            let g = ((color >> locked.info.g_shift) & 0xFF) as u8;
-            let b = ((color >> locked.info.b_shift) & 0xFF) as u8;
-
-            locked.write_pixel(x, y, r, g, b);
-        }
-    }
-
-    for c in "Hello, World!".chars() {
-        locked.write_char(c);
-    }
-
-    loop {
-        unsafe { core::arch::asm!("hlt") }
-    }
+    loop {}
 }
 
-pub struct KernelBounds {
-    pub start: usize,
-    pub end: usize,
-}
-
-/// Returns the start and end addresses of the kernel in memory.
-pub fn kernel_bounds() -> KernelBounds {
-    unsafe {
-        KernelBounds {
-            start: kernel_start.as_ptr() as usize,
-            end: kernel_end.as_ptr() as usize,
-        }
-    }
+#[panic_handler]
+fn panic(info: &core::panic::PanicInfo) -> ! {
+    log::error!("KERNEL PANIC: {info}",);
+    loop {}
 }
