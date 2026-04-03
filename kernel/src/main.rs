@@ -1,7 +1,6 @@
 #![no_std]
 #![no_main]
 #![warn(clippy::missing_const_for_fn)]
-#![allow(clippy::empty_loop)]
 
 extern crate alloc;
 
@@ -20,6 +19,8 @@ mod thread;
 mod utils;
 mod volatile;
 
+use core::ptr::null_mut;
+
 use limine::{BaseRevision, RequestsEndMarker, RequestsStartMarker, request::*};
 
 #[rustfmt::skip]
@@ -33,9 +34,8 @@ const MIN_LOG_LEVEL: log::LevelFilter = {
 
 /// The virtual address where the Linear framebuffer is mapped
 const LFB_VIRT_ADDR: usize = 0xFFFF_8000_0000_0000;
-
 const WALLPAPER_DATA: &[u8] = include_bytes!("../../wallpaper.bin");
-const FONT_DATA: &[u8] = include_bytes!("../../ter-u32n.psf");
+// const FONT_DATA: &[u8] = include_bytes!("../../ter-u32n.psf");
 
 #[used]
 #[unsafe(link_section = ".limine_requests_start")]
@@ -71,11 +71,16 @@ static REQUESTS_END: RequestsEndMarker = RequestsEndMarker::new();
 
 #[unsafe(no_mangle)]
 pub extern "C" fn kmain() -> ! {
+    assert!(
+        BASE_REVISION.is_supported(),
+        "Limine base revision not supported"
+    );
+
     kernel::init();
 
-    assert!(BASE_REVISION.is_supported(), "Limine base revision not supported");
-
-    loop {}
+    loop {
+        unsafe { core::arch::asm!("hlt") }
+    }
 }
 
 #[panic_handler]

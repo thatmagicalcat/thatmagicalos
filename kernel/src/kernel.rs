@@ -2,9 +2,9 @@
 //! fun starts in the modules :)
 //! This file exists because I want to keep main.rs clean
 
-use crate::{
-    memory::{paging::EntryFlags}, thread::Thread, *
-};
+use core::ptr::null;
+
+use crate::{graphics::PSF2Font, memory::paging::EntryFlags, thread::Thread, *};
 
 pub fn init() {
     init_logging();
@@ -70,7 +70,6 @@ pub fn init() {
     //     _ => panic!("Unsupported framebuffer format"),
     // };
 
-
     let acpi_tables = parse_acpi_tables(&mut allocator);
     register_ioapics(&acpi_tables, &mut allocator, &mut active_table);
 
@@ -101,30 +100,70 @@ pub fn init() {
         log::info!("  - {}", device);
     }
 
+    let fb @ &&limine::framebuffer::Framebuffer {
+        width,
+        height,
+        pitch,
+        bpp,
+        memory_model,
+        red_mask_size,
+        red_mask_shift,
+        green_mask_size,
+        green_mask_shift,
+        blue_mask_size,
+        blue_mask_shift,
+        ..
+    } = FRAMEBUFFER_REQUEST
+        .response()
+        .unwrap()
+        .framebuffers()
+        .first()
+        .expect("no framebuffer");
+
+    let flanterm_ctx: *mut flanterm::flanterm_context = unsafe {
+        flanterm::flanterm_fb_init(
+            None,
+            None,
+            fb.address() as _,
+            width as _,
+            height as _,
+            pitch as _,
+            red_mask_size as _,
+            red_mask_shift,
+            green_mask_size,
+            green_mask_shift,
+            blue_mask_size,
+            blue_mask_shift,
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            null_mut(),
+            0,
+            0,
+            1,
+            2,
+            2,
+            0,
+            0,
+        )
+    };
+
+    unsafe {
+        let t = "Hello, World!\n\r";
+        flanterm::flanterm_write(flanterm_ctx, t.as_ptr() as _, t.len());
+    }
+
     let timer_cfg = utils::duration_to_timer_config(
         core::time::Duration::from_millis(10).as_nanos() as _,
         io::apic::get_timer_frequency(),
     )
     .expect("Duration too long to convert to ticks");
 
-    // for x in 0..screen.width {
-    //     for y in 0..screen.height {
-    //         let r = (x * 255 / screen.width) as u8;
-    //         let g = (y * 255 / screen.height) as u8;
-    //         let b = 128;
-    //
-    //         screen.write_pixel(x, y, r, g, b);
-    //     }
-    // }
-
     scheduler::init();
-    scheduler::spawn(Thread::new(|| {
-        let mut executor = task::Executor::new();
-
-        executor.spawn(task::keyboard::print_keypresses());
-
-        executor.run();
-    }));
 
     // slap kernel after every 10ms :)
     io::apic::set_timer(
@@ -214,11 +253,8 @@ fn parse_acpi_tables(
     log::info!("RSDP physical address: {:#010x}", rsdp_phys);
 
     unsafe {
-        acpi::AcpiTables::from_rsdp(
-            io::acpi::KernelAcpiHandler,
-            rsdp_phys as _,
-        )
-        .expect("Failed to parse ACPI tables")
+        acpi::AcpiTables::from_rsdp(io::acpi::KernelAcpiHandler, rsdp_phys as _)
+            .expect("Failed to parse ACPI tables")
     }
 }
 
