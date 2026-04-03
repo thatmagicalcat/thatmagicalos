@@ -1,5 +1,3 @@
-use multiboot2::ElfSectionFlags;
-
 use crate::memory::Frame;
 
 pub const PHYSICAL_ADDRESS_MASK: u64 = 0xFFFFFFFFFF000;
@@ -26,27 +24,8 @@ bitflags::bitflags! {
     }
 }
 
-impl EntryFlags {
-    pub fn from_elf_section_flags(section: &ElfSectionFlags) -> Self {
-        let mut flags = Self::empty();
-
-        if section.contains(ElfSectionFlags::ALLOCATED) {
-            flags |= Self::PRESENT;
-        }
-
-        if section.contains(ElfSectionFlags::WRITABLE) {
-            flags |= Self::WRITABLE;
-        }
-
-        if !section.contains(ElfSectionFlags::EXECUTABLE) {
-            flags |= Self::NO_EXECUTE;
-        }
-
-        flags
-    }
-}
-
 #[repr(transparent)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub struct PageTableEntry(pub u64);
 
 impl PageTableEntry {
@@ -85,6 +64,10 @@ impl PageTableEntry {
 
     pub const fn is_present(&self) -> bool {
         (self.0 & EntryFlags::PRESENT.bits()) != 0
+    }
+
+    pub const fn is_huge(&self) -> bool {
+        (self.0 & EntryFlags::HUGE_PAGE.bits()) != 0
     }
 
     pub fn get_physical_address(&self) -> super::PhysicalAddress {

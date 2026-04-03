@@ -1,4 +1,5 @@
 use core::arch::asm;
+use crate::memory::{Frame, FrameAllocator};
 
 use super::{
     PhysicalAddress, VirtualAddress,
@@ -6,10 +7,10 @@ use super::{
     table::{ENTRIES_PER_TABLE, L4, PageTable},
 };
 
-use crate::memory::{Frame, FrameAllocator};
-
-pub const P4: *mut PageTable<L4> = 0xFFFFFFFFFFFFF000 as *mut _;
-
+// use crate::memory::{Frame, FrameAllocator};
+//
+// pub const P4: *mut PageTable<L4> = 0xFFFFFFFFFFFFF000 as *mut _;
+//
 #[derive(Clone)]
 pub struct Mapper {
     p4: *mut PageTable<L4>,
@@ -124,8 +125,8 @@ impl Mapper {
 
         // TODO: deallocate empty page tables
         // but this is very expensive to do on every unmap...
-
         // allocator.deallocate_frame(frame);
+
         crate::flush_tlb!(*page);
         frame
     }

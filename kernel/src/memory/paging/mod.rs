@@ -1,6 +1,5 @@
 mod entry;
 mod mapper;
-pub mod remap;
 mod table;
 
 pub use entry::*;
@@ -60,6 +59,14 @@ impl VirtualAddress {
         self.0 as *mut T
     }
 
+    pub unsafe fn as_ref<'a, T>(&self) -> &'a T {
+        unsafe { &*self.as_ptr() }
+    }
+
+    pub unsafe fn as_mut<'a, T>(&self) -> &'a mut T {
+        unsafe { &mut *self.as_mut_ptr() }
+    }
+
     pub const fn p4_idx(&self) -> usize {
         (self.0 as usize >> 39) & 0o777
     }
@@ -96,5 +103,9 @@ impl PhysicalAddress {
         }
 
         Self(addr)
+    }
+
+    pub fn to_virtual(&self, hhdm_offest: u64) -> VirtualAddress {
+        (self.0 + hhdm_offest).into()
     }
 }

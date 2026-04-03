@@ -16,6 +16,7 @@ pub trait FrameAllocator {
 
 #[repr(transparent)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+/// Physical Frame
 pub struct Frame(pub usize);
 
 impl Frame {
