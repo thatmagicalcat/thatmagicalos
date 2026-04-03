@@ -24,9 +24,10 @@ pub fn init<A: FrameAllocator>(mapper: &mut Mapper, allocator: &mut A) {
     log::info!("Initializing Kernel Heap Memory");
 
     log::info!(
-        "Mapping heap memory from {:#010x} to {:#010x}",
+        "Mapping heap memory from {:#010x} to {:#010x}, size: {} KiB",
         HEAP_START,
-        HEAP_START + HEAP_SIZE
+        HEAP_START + HEAP_SIZE,
+        HEAP_SIZE / 1024,
     );
 
     // remap the memory used by the heap allocator

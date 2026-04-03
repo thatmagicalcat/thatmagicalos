@@ -86,7 +86,6 @@ pub fn schedule(current_rsp: u64, resched: bool) -> u64 {
         let (_, threads) = sched.sleep_queue.pop_first().unwrap(); // safe
 
         for mut thread in threads {
-            log::trace!("Waking up thread ID: {}", thread.id);
             thread.state = ThreadState::Ready;
             sched.ready_queue.push_back(thread);
         }
@@ -133,8 +132,6 @@ pub fn schedule(current_rsp: u64, resched: bool) -> u64 {
         sched.current_thread = Some((currnet_timestamp_nanos, next_thread));
         next_rsp
     } else if let Some(idle_thread) = sched.idle_thread.take() {
-        log::debug!("Switching to idle thread");
-
         let next_rsp = idle_thread.rsp;
         sched.current_thread = Some((currnet_timestamp_nanos, idle_thread));
         next_rsp
@@ -146,8 +143,6 @@ pub fn schedule(current_rsp: u64, resched: bool) -> u64 {
 }
 
 pub fn yield_cpu() {
-    log::trace!("Yielding current thread");
-
     assert_eq!(
         interrupts::InterruptEntryType::Reschedule as u8,
         0x22,
