@@ -3,7 +3,7 @@
 PROJECT_ROOT=$(dirname "$0")
 KERNEL_PATH=$1
 ISO_ROOT=$PROJECT_ROOT/build/isodir
-LIMINE=$PROJECT_ROOT/limine/bin
+LIMINE=$PROJECT_ROOT/limine/Limine/bin
 
 DISK_IMG="$PROJECT_ROOT/build/magical_disk.img"
 if [ ! -f "$DISK_IMG" ]; then
@@ -14,6 +14,8 @@ fi
 echo "Building ISO Image with kernel: $KERNEL_PATH"
 
 mkdir -p $ISO_ROOT/boot/limine
+
+cp -v $PROJECT_ROOT/wallpaper.png $ISO_ROOT/boot/limine/
 cp -v $PROJECT_ROOT/limine.conf $ISO_ROOT/boot/limine/
 cp -v $KERNEL_PATH $ISO_ROOT/boot/kernel
 cp -v $LIMINE/limine-bios.sys $LIMINE/limine-bios-cd.bin $LIMINE/limine-uefi-cd.bin $ISO_ROOT/boot/limine
